@@ -1,17 +1,23 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const extractJson = (text: string) => {
   try {
-    // Remove possíveis blocos de código markdown
     const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const startIdx = cleaned.indexOf('{');
+    const endIdx = cleaned.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1) {
+      return JSON.parse(cleaned.substring(startIdx, endIdx + 1));
+    }
+    const arrayStart = cleaned.indexOf('[');
+    const arrayEnd = cleaned.lastIndexOf(']');
+    if (arrayStart !== -1 && arrayEnd !== -1) {
+       return JSON.parse(cleaned.substring(arrayStart, arrayEnd + 1));
+    }
     return JSON.parse(cleaned);
   } catch (e) {
-    console.error("Erro ao parsear JSON da IA:", e);
-    // Tenta encontrar algo que pareça um objeto JSON se o parse direto falhar
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    throw new Error("Resposta da IA não contém um JSON válido.");
+    console.error("Erro ao parsear JSON da IA:", e, "Texto original:", text);
+    throw new Error("Resposta da IA em formato inválido. Tente novamente.");
   }
 };
 
@@ -26,12 +32,8 @@ export const analyzeBio = async (niche?: string | null, imageB64?: string | null
     ? `specialized in ${niche}.` 
     : `identify the lawyer's specialization niche based on the provided profile info.`;
 
-  let contents: any;
-  
   const systemPrompt = `You are the world's leading Instagram expert for the legal niche. 
-  Your task is to analyze the Instagram profile ${instagramHandle ? `@${instagramHandle}` : 'provided in the image'} EXACTLY as it is at this current moment.
-  
-  CRITICAL: If an instagram handle is provided, you MUST use Google Search to find the live profile on Instagram.com, read the current bio, profile name, and check the most recent context.
+  Your task is to analyze the Instagram profile ${instagramHandle ? `@${instagramHandle}` : 'provided in the image'}.
   
   Instructions:
   1. ANALYZE the current state: What is working? What is missing? Is the niche clear?
@@ -43,10 +45,9 @@ export const analyzeBio = async (niche?: string | null, imageB64?: string | null
   ● Bio: Max 150 characters, split into 4 lines.
 
   ${nicheInstruction}
-  
   ${languageInstruction}
 
-  Return EXCLUSIVELY a JSON object following this schema:
+  Return EXCLUSIVELY a JSON object:
   {
     "nome": { "status": "string", "analise": "string", "sugestao": "string" },
     "primeiraLinha": { "status": "string", "analise": "string", "sugestao": "string" },
@@ -56,6 +57,7 @@ export const analyzeBio = async (niche?: string | null, imageB64?: string | null
     "recomendacoesGerais": ["string"]
   }`;
 
+  let contents: any;
   if (imageB64) {
     contents = {
       parts: [
@@ -64,11 +66,11 @@ export const analyzeBio = async (niche?: string | null, imageB64?: string | null
       ]
     };
   } else {
-    contents = systemPrompt;
+    contents = { parts: [{ text: systemPrompt }] };
   }
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3-pro-preview',
     contents: contents,
     config: {
       responseMimeType: "application/json",
@@ -81,12 +83,8 @@ export const analyzeBio = async (niche?: string | null, imageB64?: string | null
 
 export const generateHooks = async (niche: string, lang: 'pt' | 'en' = 'pt') => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const languageInstruction = lang === 'en' 
-    ? "Generate content in English." 
-    : "Gere o conteúdo em Português do Brasil.";
-
-  const prompt = `Act as a content marketing expert. Generate a list of 30 attractive Instagram hooks adapted for an audience needing to understand their rights in ${niche}. Return as JSON array of objects: { "text": "hook", "category": "dor/desejo/curiosidade" }
-  ${languageInstruction}`;
+  const prompt = `Act as a content marketing expert for lawyers. Generate a list of 30 high-conversion Instagram hooks for ${niche}. Return as JSON array of objects: { "text": "hook", "category": "dor/desejo/curiosidade" }
+  ${lang === 'en' ? 'In English.' : 'Em Português.'}`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -99,12 +97,8 @@ export const generateHooks = async (niche: string, lang: 'pt' | 'en' = 'pt') => 
 
 export const generateReelsScripts = async (niche: string, lang: 'pt' | 'en' = 'pt', count: number = 10) => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const languageInstruction = lang === 'en' 
-    ? "Generate scripts in English." 
-    : "Gere os roteiros em Português do Brasil.";
-
-  const prompt = `Create ${count} Reels scripts for ${niche}. Return as JSON array of objects: { "titulo": "...", "visaoGeral": "...", "hook": "...", "conteudoPrincipal": "...", "cta": "..." }
-  ${languageInstruction}`;
+  const prompt = `Create ${count} highly engaging Reels scripts for ${niche}. Return as JSON array of objects: { "titulo": "...", "visaoGeral": "...", "hook": "...", "conteudoPrincipal": "...", "cta": "..." }
+  ${lang === 'en' ? 'In English.' : 'Em Português.'}`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
