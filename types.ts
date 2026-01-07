@@ -21,3 +21,9 @@ export interface ReelScript {
   conteudoPrincipal: string;
   cta: string;
 }
+
+export interface AuthorityPost {
+  titulo: string;
+  conteudo: string;
+  objetivo: string;
+}
