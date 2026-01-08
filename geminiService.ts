@@ -1,5 +1,5 @@
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { BioAuditResult } from "./types";
 
 const MAX_RETRIES = 5;
@@ -54,26 +54,65 @@ const extractJson = (text: string) => {
   }
 };
 
+// Fix: Define response schemas for each API call to ensure structured JSON output.
+const bioResponseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        nome: { type: Type.OBJECT, properties: { status: { type: Type.STRING }, analise: { type: Type.STRING }, sugestao: { type: Type.STRING } }, required: ['status', 'analise', 'sugestao'] },
+        primeiraLinha: { type: Type.OBJECT, properties: { status: { type: Type.STRING }, analise: { type: Type.STRING }, sugestao: { type: Type.STRING } }, required: ['status', 'analise', 'sugestao'] },
+        segundaLinha: { type: Type.OBJECT, properties: { status: { type: Type.STRING }, analise: { type: Type.STRING }, sugestao: { type: Type.STRING } }, required: ['status', 'analise', 'sugestao'] },
+        terceiraLinha: { type: Type.OBJECT, properties: { status: { type: Type.STRING }, analise: { type: Type.STRING }, sugestao: { type: Type.STRING } }, required: ['status', 'analise', 'sugestao'] },
+        quartaLinha: { type: Type.OBJECT, properties: { status: { type: Type.STRING }, analise: { type: Type.STRING }, sugestao: { type: Type.STRING } }, required: ['status', 'analise', 'sugestao'] },
+        recomendacoesGerais: { type: Type.ARRAY, items: { type: Type.STRING } }
+    }
+};
+
+const hooksResponseSchema = {
+    type: Type.ARRAY,
+    items: { type: Type.OBJECT, properties: { text: { type: Type.STRING }, category: { type: Type.STRING } }, required: ['text', 'category'] }
+};
+
+const reelsScriptsResponseSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            titulo: { type: Type.STRING },
+            visaoGeral: { type: Type.STRING },
+            hook: { type: Type.STRING },
+            conteudoPrincipal: { type: Type.STRING },
+            cta: { type: Type.STRING }
+        },
+        required: ['titulo', 'visaoGeral', 'hook', 'conteudoPrincipal', 'cta']
+    }
+};
+
+const authorityPostsResponseSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            titulo: { type: Type.STRING },
+            conteudo: { type: Type.STRING },
+            objetivo: { type: Type.STRING }
+        },
+        required: ['titulo', 'conteudo', 'objetivo']
+    }
+};
+
 export const analyzeBio = async (niche?: string | null, imageB64?: string | null, instagramHandle?: string, lang: 'pt' | 'en' = 'pt') => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const languageInstruction = lang === 'en' ? "Response MUST be in English." : "A resposta DEVE ser em Português do Brasil.";
     const nicheInstruction = niche ? `specialized in ${niche}.` : `identify the lawyer's specialization niche based on the provided profile info.`;
 
+    // Fix: Simplified prompt, as the JSON structure is now defined in the responseSchema.
     const systemPrompt = `You are the world's leading Instagram expert for the legal niche. 
     Analyze the profile: ${instagramHandle ? `@${instagramHandle}` : 'from the image'}.
     1. DIAGNOSE: What's working/missing? 2. OPTIMIZE: Suggest better versions.
     Name: Max 64 chars. Bio: Max 150 chars, 4 lines.
     ${nicheInstruction} ${languageInstruction}
-    Return ONLY JSON:
-    {
-      "nome": { "status": "string", "analise": "string", "sugestao": "string" },
-      "primeiraLinha": { "status": "string", "analise": "string", "sugestao": "string" },
-      "segundaLinha": { "status": "string", "analise": "string", "sugestao": "string" },
-      "terceiraLinha": { "status": "string", "analise": "string", "sugestao": "string" },
-      "quartaLinha": { "status": "string", "analise": "string", "sugestao": "string" },
-      "recomendacoesGerais": ["string"]
-    }`;
+    Return the analysis in the specified JSON format.`;
 
     let contents: any = imageB64 
       ? { parts: [{ inlineData: { mimeType: 'image/jpeg', data: imageB64.split(',')[1] } }, { text: systemPrompt }] }
@@ -82,7 +121,11 @@ export const analyzeBio = async (niche?: string | null, imageB64?: string | null
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: contents,
-      config: { responseMimeType: "application/json" }
+      // Fix: Use responseSchema to enforce JSON output structure.
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: bioResponseSchema 
+      }
     });
     return extractJson(response.text || '{}');
   });
@@ -91,24 +134,29 @@ export const analyzeBio = async (niche?: string | null, imageB64?: string | null
 const buildContext = (audit: BioAuditResult | null) => {
   if (!audit) return "";
   return `Context based on recent Bio audit:
-  - Main Value: ${audit.primeiraLinha.sugestao}
-  - Authority: ${audit.segundaLinha.sugestao}
-  - Social Proof: ${audit.terceiraLinha.sugestao}
-  - CTA: ${audit.quartaLinha.sugestao}`;
+  - Main Value: ${audit.primeiraLinha?.sugestao || ''}
+  - Authority: ${audit.segundaLinha?.sugestao || ''}
+  - Social Proof: ${audit.terceiraLinha?.sugestao || ''}
+  - CTA: ${audit.quartaLinha?.sugestao || ''}`;
 };
 
 export const generateHooks = async (niche: string, auditContext: BioAuditResult | null, lang: 'pt' | 'en' = 'pt') => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Fix: Simplified prompt, as the JSON structure is now defined in the responseSchema.
     const prompt = `Act as a content marketing expert for lawyers. Generate 30 high-conversion Instagram hooks for ${niche}.
     ${buildContext(auditContext)}
-    Return ONLY a JSON array of objects: [ { "text": "...", "category": "dor/desejo/curiosidade" } ]
+    The hook category should be one of "dor", "desejo", or "curiosidade".
     ${lang === 'en' ? 'In English.' : 'Em Português.'}`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      // Fix: Use responseSchema to enforce JSON output structure.
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: hooksResponseSchema
+      }
     });
     return extractJson(response.text || '[]');
   });
@@ -117,15 +165,19 @@ export const generateHooks = async (niche: string, auditContext: BioAuditResult 
 export const generateReelsScripts = async (niche: string, auditContext: BioAuditResult | null, lang: 'pt' | 'en' = 'pt') => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Fix: Simplified prompt, as the JSON structure is now defined in the responseSchema.
     const prompt = `Create 10 highly engaging Reels scripts for ${niche}.
     ${buildContext(auditContext)}
-    Return ONLY JSON array: [ { "titulo": "...", "visaoGeral": "...", "hook": "...", "conteudoPrincipal": "...", "cta": "..." } ]
     ${lang === 'en' ? 'In English.' : 'Em Português.'}`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      // Fix: Use responseSchema to enforce JSON output structure.
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: reelsScriptsResponseSchema
+      }
     });
     return extractJson(response.text || '[]');
   });
@@ -134,15 +186,19 @@ export const generateReelsScripts = async (niche: string, auditContext: BioAudit
 export const generateAuthorityPosts = async (niche: string, auditContext: BioAuditResult | null, lang: 'pt' | 'en' = 'pt') => {
   return withRetry(async () => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Fix: Simplified prompt, as the JSON structure is now defined in the responseSchema.
     const prompt = `Create 10 authority-building Instagram post ideas for ${niche}.
     ${buildContext(auditContext)}
-    Return ONLY JSON array: [ { "titulo": "...", "conteudo": "...", "objetivo": "..." } ]
     ${lang === 'en' ? 'In English.' : 'Em Português.'}`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      // Fix: Use responseSchema to enforce JSON output structure.
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: authorityPostsResponseSchema
+      }
     });
     return extractJson(response.text || '[]');
   });

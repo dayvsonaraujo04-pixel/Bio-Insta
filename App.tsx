@@ -26,7 +26,6 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>('black');
   const [font, setFont] = useState<FontStyle>('Inter');
   
-  // Estado para Fundo Personalizado
   const [bgImage, setBgImage] = useState<string>('https://images.unsplash.com/photo-1505664194779-8beaceb93744?q=80&w=2070&auto=format&fit=crop');
   const bgInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,7 +60,6 @@ const App: React.FC = () => {
     setMetrics(prev => ({ ...prev, [key]: prev[key] + amount }));
   };
 
-  // Função de Alerta Sonoro Automático (Success Jingle)
   const playSuccessSound = () => {
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -86,12 +84,10 @@ const App: React.FC = () => {
     }
   };
 
-  // Função corrigida para mudança de fundo
   const handleBgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Usar FileReader para converter para base64 para persistência
     const reader = new FileReader();
     reader.onload = (event) => {
       const result = event.target?.result as string;
@@ -107,7 +103,6 @@ const App: React.FC = () => {
     reader.onerror = () => alert("Erro ao ler o arquivo de imagem.");
     reader.readAsDataURL(file);
     
-    // Resetar o input para permitir selecionar a mesma imagem novamente se desejar
     if (bgInputRef.current) bgInputRef.current.value = "";
   };
 
@@ -147,6 +142,19 @@ const App: React.FC = () => {
     if ((window as any).aistudio) await (window as any).aistudio.openSelectKey();
   };
 
+  const handleError = async (error: any) => {
+    console.error("Erro na chamada da API:", error);
+    const msg = (error?.message || String(error)).toLowerCase();
+    
+    if (msg.includes("429") || msg.includes("quota") || msg.includes("resource_exhausted")) {
+      if (window.confirm(t.errorQuota)) {
+        await handleOpenKey();
+      }
+    } else {
+      alert(t.errorGeneric + "\n\n" + (error?.message || String(error)).substring(0, 150));
+    }
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -182,7 +190,7 @@ const App: React.FC = () => {
       playSuccessSound(); 
       scrollToResults();
     } catch (error: any) {
-      console.error(error);
+      handleError(error);
     } finally {
       setLoading({ active: false, type: 'none', messageIndex: 0 });
     }
@@ -199,7 +207,9 @@ const App: React.FC = () => {
         setHooks(h);
         incrementMetric('hooks', h.length);
         playSuccessSound();
-      } catch (error) {}
+      } catch (error) {
+        handleError(error);
+      }
       finally { setLoading({ active: false, type: 'none', messageIndex: 0 }); }
     } else if (tab === 'scripts' && scripts.length === 0) {
       setLoading({ active: true, type: 'scripts', messageIndex: 0 });
@@ -208,7 +218,9 @@ const App: React.FC = () => {
         setScripts(s);
         incrementMetric('scripts', s.length);
         playSuccessSound();
-      } catch (error) {}
+      } catch (error) {
+        handleError(error);
+      }
       finally { setLoading({ active: false, type: 'none', messageIndex: 0 }); }
     } else if (tab === 'authority' && authorityPosts.length === 0) {
       setLoading({ active: true, type: 'authority', messageIndex: 0 });
@@ -217,7 +229,9 @@ const App: React.FC = () => {
         setAuthorityPosts(a);
         incrementMetric('authority', a.length);
         playSuccessSound();
-      } catch (error) {}
+      } catch (error) {
+        handleError(error);
+      }
       finally { setLoading({ active: false, type: 'none', messageIndex: 0 }); }
     }
     scrollToResults();
@@ -226,7 +240,6 @@ const App: React.FC = () => {
   return (
     <div className={`min-h-screen transition-all duration-500 ${themeConfig.bg} ${themeConfig.text}`} style={{ fontFamily: font }}>
       
-      {/* Camada de Fundo Suave Dinâmica - Fora do fluxo do conteúdo */}
       <div className="custom-app-bg" style={{ backgroundImage: `url(${bgImage})` }}></div>
 
       <div className="app-content-wrapper min-h-screen pb-20">
@@ -236,7 +249,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Settings Bar Superior */}
         <div className={`${themeConfig.header} backdrop-blur-md text-white px-4 py-3 flex flex-wrap justify-between items-center text-xs font-bold border-b border-white/10 gap-4 shadow-xl relative z-50`}>
           <div className="flex items-center gap-6">
             <div className="flex bg-white/10 rounded-lg p-1">
@@ -337,7 +349,6 @@ const App: React.FC = () => {
 
           {auditResult && (
             <div id="results-section" className="space-y-12 animate-fadeIn pt-10">
-              {/* Navegação por Abas com Estilo Premium */}
               <div className={`relative flex p-2.5 rounded-[2rem] flex-wrap overflow-hidden transition-all duration-500 shadow-2xl ${theme === 'white' ? 'bg-slate-200' : 'bg-white/5 backdrop-blur-3xl border border-white/10'}`}>
                 {[
                   { id: 'audit', label: t.tabAudit, color: 'hover:text-white', activeColor: 'text-white bg-white/10' },
@@ -348,9 +359,12 @@ const App: React.FC = () => {
                   <button 
                     key={tab.id}
                     onClick={() => handleTabSwitch(tab.id as any)} 
-                    className={`relative z-10 flex-1 min-w-[140px] py-5 px-6 rounded-2xl font-black text-sm uppercase tracking-[0.2em] transition-all duration-500 transform ${activeTab === tab.id ? `${tab.activeColor} scale-100 shadow-inner` : `opacity-30 ${tab.color} hover:opacity-100`}`}
+                    className={`relative z-10 flex-1 min-w-[140px] py-5 px-6 rounded-2xl font-black text-sm uppercase tracking-[0.2em] transition-all duration-500 transform ${activeTab === tab.id ? `${tab.activeColor} scale-100 shadow-inner` : `opacity-40 ${tab.color} hover:opacity-100`}`}
                   >
                     {tab.label}
+                    {tab.id === 'hooks' && hooks.length === 0 && auditResult && <i className="fa-solid fa-wand-magic-sparkles ml-2 text-xs opacity-50 group-hover:opacity-100 transition-opacity"></i>}
+                    {tab.id === 'authority' && authorityPosts.length === 0 && auditResult && <i className="fa-solid fa-wand-magic-sparkles ml-2 text-xs opacity-50 group-hover:opacity-100 transition-opacity"></i>}
+                    {tab.id === 'scripts' && scripts.length === 0 && auditResult && <i className="fa-solid fa-wand-magic-sparkles ml-2 text-xs opacity-50 group-hover:opacity-100 transition-opacity"></i>}
                     {activeTab === tab.id && <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-current rounded-full animate-bounce shadow-lg"></span>}
                   </button>
                 ))}
@@ -380,12 +394,22 @@ const App: React.FC = () => {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pb-20">
-                {activeTab === 'audit' && (
+                {activeTab === 'audit' && auditResult && (
                   <>
                     <AuditCard index={0} title="Nome de Exibição" data={auditResult.nome} onCopy={() => copyToClipboard(auditResult.nome.sugestao)} theme={themeConfig} t={t} />
                     <AuditCard index={1} title="Linha de Valor" data={auditResult.primeiraLinha} onCopy={() => copyToClipboard(auditResult.primeiraLinha.sugestao)} theme={themeConfig} t={t} />
                     <AuditCard index={2} title="Autoridade Técnica" data={auditResult.segundaLinha} onCopy={() => copyToClipboard(auditResult.segundaLinha.sugestao)} theme={themeConfig} t={t} />
-                    <AuditCard index={3} title="Chamada para Ação" data={auditResult.terceiraLinha} onCopy={() => copyToClipboard(auditResult.terceiraLinha.sugestao)} theme={themeConfig} t={t} />
+                    <AuditCard index={3} title={t.socialProof} data={auditResult.terceiraLinha} onCopy={() => copyToClipboard(auditResult.terceiraLinha.sugestao)} theme={themeConfig} t={t} />
+                    <AuditCard index={4} title={t.cta} data={auditResult.quartaLinha} onCopy={() => copyToClipboard(auditResult.quartaLinha.sugestao)} theme={themeConfig} t={t} />
+                    
+                    {auditResult.recomendacoesGerais && auditResult.recomendacoesGerais.length > 0 && (
+                      <div className={`md:col-span-2 animate-slideUp ${themeConfig.card} p-12 rounded-[3rem] border border-white/10 card-hover`} style={{ animationDelay: `${5 * 0.1}s` }}>
+                        <h4 className="font-black text-2xl tracking-tighter mb-6">{t.generalRecommendations}</h4>
+                        <ul className="space-y-4 list-disc list-inside opacity-80 pl-2">
+                          {auditResult.recomendacoesGerais.map((rec, i) => <li key={i} className="leading-relaxed">{rec}</li>)}
+                        </ul>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -442,7 +466,6 @@ const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Loading Overlay Premium */}
       {loading.active && (
         <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-2xl flex flex-col items-center justify-center z-[200] animate-fadeIn">
           <div className="relative w-28 h-28 mb-12">
@@ -460,21 +483,27 @@ const App: React.FC = () => {
   );
 };
 
-const AuditCard: React.FC<any> = ({ title, data, onCopy, theme, t, index }) => (
-  <div className={`animate-slideUp ${theme.card} p-12 rounded-[3rem] border border-white/10 card-hover transition-all relative group`} style={{ animationDelay: `${index * 0.1}s` }}>
-    <div className="flex justify-between items-center mb-8">
-      <h4 className="font-black text-2xl tracking-tighter">{title}</h4>
-      <span className="bg-indigo-600/20 text-indigo-400 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-600/10">{data.status}</span>
-    </div>
-    <div className="space-y-8">
-      <p className="opacity-60 text-sm leading-relaxed">{data.analise}</p>
-      <div className="bg-gradient-to-br from-white/5 to-transparent p-8 rounded-3xl relative border border-white/5 group-hover:border-indigo-500/20 transition-colors">
-        <button onClick={onCopy} className="absolute top-6 right-6 text-white/20 hover:text-indigo-400 transition-all hover:scale-125"><i className="fa-solid fa-copy"></i></button>
-        <span className="text-[10px] font-black text-indigo-400 block mb-3 uppercase tracking-[0.2em]">Otimização Sugerida</span>
-        <p className="font-bold italic text-xl leading-tight opacity-90 tracking-tight">"{data.sugestao}"</p>
+const AuditCard: React.FC<any> = ({ title, data, onCopy, theme, t, index }) => {
+  if (!data) {
+    return null;
+  }
+  
+  return (
+    <div className={`animate-slideUp ${theme.card} p-12 rounded-[3rem] border border-white/10 card-hover transition-all relative group`} style={{ animationDelay: `${index * 0.1}s` }}>
+      <div className="flex justify-between items-center mb-8">
+        <h4 className="font-black text-2xl tracking-tighter">{title}</h4>
+        <span className="bg-indigo-600/20 text-indigo-400 px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-600/10">{data.status}</span>
+      </div>
+      <div className="space-y-8">
+        <p className="opacity-60 text-sm leading-relaxed">{data.analise}</p>
+        <div className="bg-gradient-to-br from-white/5 to-transparent p-8 rounded-3xl relative border border-white/5 group-hover:border-indigo-500/20 transition-colors">
+          <button onClick={onCopy} className="absolute top-6 right-6 text-white/20 hover:text-indigo-400 transition-all hover:scale-125"><i className="fa-solid fa-copy"></i></button>
+          <span className="text-[10px] font-black text-indigo-400 block mb-3 uppercase tracking-[0.2em]">{t.suggestion}</span>
+          <p className="font-bold italic text-xl leading-tight opacity-90 tracking-tight">"{data.sugestao}"</p>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default App;

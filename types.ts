@@ -14,7 +14,6 @@ export interface Hook {
 }
 
 export interface ReelScript {
-  id: number;
   titulo: string;
   visaoGeral: string;
   hook: string;
